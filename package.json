@@ -1,0 +1,48 @@
+{
+  "name": "monolith-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Monolith blog — 30 tools for full content management via AI assistants",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "monolith-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "blog",
+    "monolith",
+    "ai",
+    "cloudflare-workers"
+  ],
+  "author": "one-ea",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/one-ea/Monolith-MCP.git"
+  },
+  "homepage": "https://github.com/one-ea/Monolith-MCP",
+  "bugs": {
+    "url": "https://github.com/one-ea/Monolith-MCP/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^3.25.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "@types/node": "^20.17.57"
+  }
+}
