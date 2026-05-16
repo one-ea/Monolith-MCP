@@ -6,6 +6,52 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { apiRequest } from "../client.js";
 
+const legacyStatusSchema = z.enum(["published", "draft", "scheduled"]);
+
+const postWriteFields = {
+  title: z.string().optional().describe("文章标题"),
+  slug: z.string().optional().describe("URL 标识符，如 my-first-post"),
+  content: z.string().optional().describe("Markdown 格式的文章正文"),
+  excerpt: z.string().optional().describe("文章摘要"),
+  coverColor: z.string().optional().describe("封面渐变色值或样式标识"),
+  coverImage: z.string().optional().describe("封面图 URL"),
+  published: z.boolean().optional().describe("是否发布；false 表示草稿"),
+  listed: z.boolean().optional().describe("是否出现在公开列表中"),
+  tags: z.array(z.string()).optional().describe("标签列表"),
+  category: z.string().optional().describe("分类名称"),
+  seriesSlug: z.string().optional().describe("所属系列 slug"),
+  seriesOrder: z.number().optional().describe("系列中的排序"),
+  pinned: z.boolean().optional().describe("是否置顶"),
+  publishAt: z.string().nullable().optional().describe("定时发布时间 (ISO 8601)，为空表示不定时"),
+  status: legacyStatusSchema.optional().describe("兼容旧字段：published/draft/scheduled，会转换为 published + publishAt"),
+  publishedAt: z.string().optional().describe("兼容旧字段：会转换为 publishAt"),
+};
+
+const { slug: _slugField, ...postPatchFields } = postWriteFields;
+
+type PostWriteParams = z.infer<z.ZodObject<typeof postWriteFields>>;
+
+function normalizePostPayload(params: PostWriteParams) {
+  const { status, publishedAt, ...payload } = params;
+  const next: Record<string, unknown> = { ...payload };
+
+  if (status === "published") {
+    next.published = true;
+  } else if (status === "draft") {
+    next.published = false;
+    next.publishAt = null;
+  } else if (status === "scheduled") {
+    next.published = false;
+    if (publishedAt && next.publishAt === undefined) next.publishAt = publishedAt;
+  }
+
+  if (publishedAt && next.publishAt === undefined) {
+    next.publishAt = publishedAt;
+  }
+
+  return next;
+}
+
 export function registerPostTools(server: McpServer) {
   // ── 列出所有文章（含草稿）──
   server.tool(
@@ -61,26 +107,20 @@ export function registerPostTools(server: McpServer) {
   // ── 创建文章 ──
   server.tool(
     "create_post",
-    "创建一篇新文章。需提供 title、slug、content（Markdown），可选 tags、category、status 等",
+    "创建一篇新文章。需提供 title、slug、content（Markdown），可选 tags、category、published、publishAt 等",
     {
+      ...postWriteFields,
       title: z.string().describe("文章标题"),
       slug: z.string().describe("URL 标识符，如 my-first-post"),
       content: z.string().describe("Markdown 格式的文章正文"),
-      excerpt: z.string().optional().describe("文章摘要"),
-      coverImage: z.string().optional().describe("封面图 URL"),
-      status: z.enum(["published", "draft", "scheduled"]).default("draft").describe("发布状态"),
+      published: z.boolean().default(false).describe("是否发布；默认创建草稿"),
       tags: z.array(z.string()).default([]).describe("标签列表"),
-      category: z.string().optional().describe("分类名称"),
-      series: z.string().optional().describe("所属系列 slug"),
-      seriesOrder: z.number().optional().describe("系列中的排序"),
       pinned: z.boolean().default(false).describe("是否置顶"),
-      allowComments: z.boolean().default(true).describe("是否允许评论"),
-      publishedAt: z.string().optional().describe("定时发布时间 (ISO 8601)"),
     },
     async (params) => {
       const result = await apiRequest("/api/admin/posts", {
         method: "POST",
-        body: params,
+        body: normalizePostPayload(params),
       });
       return {
         content: [{
@@ -97,23 +137,13 @@ export function registerPostTools(server: McpServer) {
     "更新指定 slug 的文章内容或元信息",
     {
       slug: z.string().describe("要更新的文章 slug"),
-      title: z.string().optional().describe("新标题"),
-      content: z.string().optional().describe("新的 Markdown 正文"),
-      excerpt: z.string().optional().describe("新摘要"),
-      coverImage: z.string().optional().describe("新封面图 URL"),
-      status: z.enum(["published", "draft", "scheduled"]).optional().describe("新状态"),
-      tags: z.array(z.string()).optional().describe("新标签列表"),
-      category: z.string().optional().describe("新分类"),
-      series: z.string().optional().describe("新系列 slug"),
-      seriesOrder: z.number().optional().describe("系列排序"),
-      pinned: z.boolean().optional().describe("是否置顶"),
-      allowComments: z.boolean().optional().describe("是否允许评论"),
-      publishedAt: z.string().optional().describe("定时发布时间"),
+      ...postPatchFields,
+      saveVersion: z.boolean().optional().describe("是否在保存后创建文章版本快照"),
     },
     async ({ slug, ...updates }) => {
       const result = await apiRequest(`/api/admin/posts/${encodeURIComponent(slug)}`, {
         method: "PUT",
-        body: updates,
+        body: normalizePostPayload(updates),
       });
       return {
         content: [{
@@ -163,7 +193,7 @@ export function registerPostTools(server: McpServer) {
       }
       const result = await apiRequest("/api/admin/posts/batch", {
         method: "POST",
-        body: { slugs, action },
+        body: { slugs, action: action === "draft" ? "unpublish" : action },
       });
       return {
         content: [{
@@ -185,6 +215,31 @@ export function registerPostTools(server: McpServer) {
         content: [{
           type: "text" as const,
           text: JSON.stringify(versions, null, 2),
+        }],
+      };
+    }
+  );
+
+  // ── 恢复文章历史版本 ──
+  server.tool(
+    "restore_post_version",
+    "⚠️ 【高危操作】将文章恢复到指定历史版本。恢复前后端会自动为当前状态创建快照。",
+    {
+      slug: z.string().describe("文章 slug"),
+      versionId: z.number().int().positive().describe("要恢复的版本 ID"),
+      confirm: z.enum(["yes"]).describe("必须输入 'yes' 确认高危操作"),
+    },
+    async ({ slug, versionId, confirm }) => {
+      if (confirm !== "yes") {
+        return { content: [{ type: "text" as const, text: "❌ 操作已取消：未确认高危操作。" }], isError: true };
+      }
+      const result = await apiRequest(`/api/admin/posts/${encodeURIComponent(slug)}/versions/${versionId}/restore`, {
+        method: "POST",
+      });
+      return {
+        content: [{
+          type: "text" as const,
+          text: `✅ 文章 "${slug}" 已恢复到版本 #${versionId}：${JSON.stringify(result, null, 2)}`,
         }],
       };
     }

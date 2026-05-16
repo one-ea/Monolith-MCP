@@ -22,7 +22,7 @@ function parseJwt(token: string) {
 }
 
 /** 从环境变量读取配置 */
-function getConfig() {
+export function getConfig() {
   const apiUrl = process.env.MONOLITH_API_URL;
   const password = process.env.MONOLITH_PASSWORD;
 
@@ -75,7 +75,7 @@ async function login(): Promise<string> {
 }
 
 /** 获取有效的 Token（自动登录/续签） */
-async function getToken(): Promise<string> {
+export async function getToken(): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   if (cachedToken && now < tokenExpiresAt) {
     return cachedToken;
@@ -155,6 +155,57 @@ export async function apiRequest<T = unknown>(
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error(`API 请求超时 ${method} ${path} (${timeoutMs}ms)`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/** multipart/form-data 请求，供媒体上传等非 JSON 接口复用认证与超时逻辑 */
+export async function apiFormRequest<T = unknown>(
+  path: string,
+  formData: FormData,
+  options: {
+    method?: string;
+    auth?: boolean;
+    timeoutMs?: number;
+  } = {}
+): Promise<T> {
+  const { method = "POST", auth = true, timeoutMs = 30000 } = options;
+  const { apiUrl } = getConfig();
+  const headers: Record<string, string> = {};
+
+  if (auth) {
+    const token = await getToken();
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(`${apiUrl}${path}`, {
+      method,
+      headers,
+      body: formData,
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`API 表单请求失败 ${method} ${path} (${res.status}): ${errorText}`);
+    }
+
+    const contentType = res.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      return (await res.json()) as T;
+    }
+
+    return (await res.text()) as unknown as T;
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`API 表单请求超时 ${method} ${path} (${timeoutMs}ms)`);
     }
     throw error;
   } finally {

@@ -19,6 +19,9 @@ import { registerSettingsTools } from "./tools/settings.js";
 import { registerPageTools } from "./tools/pages.js";
 import { registerTaxonomyTools } from "./tools/taxonomy.js";
 import { registerBackupTools } from "./tools/backup.js";
+import { registerImportTools } from "./tools/import.js";
+
+const TOOL_COUNT = 42;
 
 async function main() {
   // 创建 MCP 服务器实例
@@ -33,19 +36,20 @@ async function main() {
         "这是 Monolith 博客的专属管理 MCP 服务器。",
         "你可以通过以下工具全权管理博客的内容与配置：",
         "",
-        "📝 文章：list_posts, get_post, create_post, update_post, delete_post, batch_posts, search_posts, list_post_versions",
+        "📝 文章：list_posts, get_post, create_post, update_post, delete_post, batch_posts, search_posts, list_post_versions, restore_post_version",
         "💬 评论：list_comments, approve_comment, delete_comment",
-        "🖼️ 媒体：list_media, upload_media, delete_media",
-        "📊 统计：get_dashboard_stats, get_analytics, get_traffic",
+        "🖼️ 媒体：list_media, upload_media, delete_media, localize_post_images, localize_all_images",
+        "📊 统计：get_dashboard_stats, get_analytics, get_ae_analytics, get_traffic",
         "⚙️ 设置：get_settings, update_settings",
         "📄 页面：list_pages, get_page, upsert_page, delete_page",
         "🏷️ 分类：list_tags, list_categories, get_series",
-        "💾 备份：export_backup, backup_to_r2, list_r2_backups, restore_backup",
+        "💾 备份：export_backup, backup_to_r2, backup_to_webdav, test_webdav_backup, list_r2_backups, preview_backup, preview_r2_backup, delete_r2_backup, restore_backup, restore_r2_backup",
+        "📦 导入：preview_halo_import, import_halo_data",
         "",
         "⚠️ 安全规则：",
-        "- 标记为【高危操作】的工具（delete_*, batch_posts, restore_backup）执行前必须向用户确认",
+        "- 标记为【高危操作】的工具（delete_*, batch_posts delete, restore_*, overwrite import）执行前必须向用户确认",
         "- restore_backup 会自动在恢复前创建安全快照",
-        "- create_post 默认创建草稿状态，需显式设置 status='published' 才会立即发布",
+        "- create_post 默认创建草稿状态，需显式设置 published=true 才会立即发布",
       ].join("\n"),
     }
   );
@@ -59,12 +63,13 @@ async function main() {
   registerPageTools(server);
   registerTaxonomyTools(server);
   registerBackupTools(server);
+  registerImportTools(server);
 
   // 启动 stdio 传输
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  console.error("🏠 Monolith MCP 服务器已启动 (stdio)，共注册 30 个工具。");
+  console.error(`🏠 Monolith MCP 服务器已启动 (stdio)，共注册 ${TOOL_COUNT} 个工具。`);
 }
 
 main().catch((error) => {

@@ -4,7 +4,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { apiRequest } from "../client.js";
+import { apiFormRequest, apiRequest } from "../client.js";
 
 export function registerMediaTools(server: McpServer) {
   // ── 列出媒体库 ──
@@ -38,53 +38,68 @@ export function registerMediaTools(server: McpServer) {
       contentType: z.string().default("application/octet-stream").describe("MIME 类型"),
     },
     async ({ filename, base64Content, contentType }) => {
-      // 将 base64 转为二进制并通过 multipart 上传
-      const { apiUrl, password: _ } = getConfigForUpload();
-      const token = await getTokenForUpload();
-
       const buffer = Buffer.from(base64Content, "base64");
       const blob = new Blob([buffer], { type: contentType });
 
       const formData = new FormData();
       formData.append("file", blob, filename);
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 媒体上传 30s 超时
-
       try {
-        const res = await fetch(`${apiUrl}/api/admin/upload`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-          signal: controller.signal,
-        });
-
-        if (!res.ok) {
-          const errorText = await res.text();
-          return {
-            content: [{
-              type: "text" as const,
-              text: `❌ 上传失败 (${res.status}): ${errorText}`,
-            }],
-            isError: true,
-          };
-        }
-
-        const result = await res.json();
+        const result = await apiFormRequest("/api/admin/upload", formData);
         return {
           content: [{
             type: "text" as const,
             text: `✅ 文件 "${filename}" 上传成功：${JSON.stringify(result, null, 2)}`,
           }],
         };
-      } catch (err: any) {
-        if (err.name === "AbortError") {
-          return { content: [{ type: "text" as const, text: "❌ 上传超时 (30s)" }], isError: true };
-        }
-        throw err;
-      } finally {
-        clearTimeout(timeoutId);
+      } catch (err) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `❌ 上传失败：${err instanceof Error ? err.message : "未知错误"}`,
+          }],
+          isError: true,
+        };
       }
+    }
+  );
+
+  // ── 单篇外链图片本地化 ──
+  server.tool(
+    "localize_post_images",
+    "将指定文章正文中的 HTTPS 外链图片抓取到当前对象存储，并把正文引用替换为 /cdn/ 本地地址",
+    {
+      slug: z.string().describe("要处理的文章 slug"),
+    },
+    async ({ slug }) => {
+      const result = await apiRequest(`/api/admin/posts/${encodeURIComponent(slug)}/localize-images`, {
+        method: "POST",
+      });
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify(result, null, 2),
+        }],
+      };
+    }
+  );
+
+  // ── 全站外链图片本地化 ──
+  server.tool(
+    "localize_all_images",
+    "批量扫描所有文章，将 HTTPS 外链图片抓取到当前对象存储，并更新文章正文引用",
+    {},
+    async () => {
+      const result = await apiRequest("/api/admin/localize-all-images", {
+        method: "POST",
+        timeoutMs: 120000,
+      });
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify(result, null, 2),
+        }],
+      };
     }
   );
 
@@ -111,30 +126,4 @@ export function registerMediaTools(server: McpServer) {
       };
     }
   );
-}
-
-// ── 上传专用：需要直接访问 config 和 token ──
-function getConfigForUpload() {
-  const apiUrl = process.env.MONOLITH_API_URL?.replace(/\/$/, "") || "";
-  const password = process.env.MONOLITH_PASSWORD || "";
-  return { apiUrl, password };
-}
-
-let _uploadToken: string | null = null;
-let _uploadTokenExp = 0;
-
-async function getTokenForUpload(): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
-  if (_uploadToken && now < _uploadTokenExp) return _uploadToken;
-
-  const { apiUrl, password } = getConfigForUpload();
-  const res = await fetch(`${apiUrl}/api/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password }),
-  });
-  const data = (await res.json()) as { token: string };
-  _uploadToken = data.token;
-  _uploadTokenExp = now + 7 * 24 * 3600 - 3600;
-  return _uploadToken;
 }

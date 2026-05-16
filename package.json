@@ -12,6 +12,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "smoke": "node scripts/smoke-test.mjs",
     "start": "node dist/index.js",
     "dev": "tsc --watch",
     "prepublishOnly": "npm run build"

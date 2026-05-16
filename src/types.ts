@@ -4,21 +4,23 @@
 
 /** 文章数据结构 */
 export interface Post {
+  id?: number;
   slug: string;
   title: string;
   content: string;
   excerpt?: string;
+  coverColor?: string;
   coverImage?: string;
-  status: "published" | "draft" | "scheduled";
+  published: boolean;
+  listed?: boolean;
   tags: string[];
   category?: string;
-  series?: string;
+  seriesSlug?: string | null;
   seriesOrder?: number;
   pinned?: boolean;
-  allowComments?: boolean;
   createdAt: string;
   updatedAt: string;
-  publishedAt?: string;
+  publishAt?: string | null;
   viewCount?: number;
 }
 
@@ -45,12 +47,24 @@ export interface MediaFile {
 
 /** 站点设置 */
 export interface SiteSettings {
+  site_title?: string;
   site_name?: string;
   site_description?: string;
+  site_tagline?: string;
+  site_og_image?: string;
+  hero_kicker?: string;
+  hero_subtitle?: string;
+  hero_description?: string;
+  hero_actions?: string;
+  hero_topics?: string;
   posts_per_page?: number;
   comments_require_approval?: boolean;
   custom_header?: string;
   custom_footer?: string;
+  webdav_url?: string;
+  webdav_username?: string;
+  webdav_password?: string;
+  webdav_path?: string;
   [key: string]: unknown;
 }
 
@@ -64,10 +78,11 @@ export interface DashboardStats {
 
 /** 独立页面 */
 export interface Page {
+  id?: number;
   slug: string;
   title: string;
   content: string;
-  status: "published" | "draft";
+  published: boolean;
   showInNav?: boolean;
   sortOrder?: number;
   createdAt: string;

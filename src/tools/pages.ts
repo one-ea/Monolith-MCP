@@ -48,13 +48,17 @@ export function registerPageTools(server: McpServer) {
       title: z.string().describe("页面标题"),
       content: z.string().describe("Markdown 正文"),
       status: z.enum(["published", "draft"]).default("draft").describe("发布状态"),
+      published: z.boolean().optional().describe("是否发布；优先级高于 status"),
       showInNav: z.boolean().default(false).describe("是否在导航栏显示"),
       sortOrder: z.number().default(0).describe("导航排序"),
     },
-    async (params) => {
+    async ({ status, published, ...params }) => {
       const result = await apiRequest("/api/admin/pages", {
         method: "POST",
-        body: params,
+        body: {
+          ...params,
+          published: published ?? status === "published",
+        },
       });
       return {
         content: [{
