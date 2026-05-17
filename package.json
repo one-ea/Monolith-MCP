@@ -35,9 +35,6 @@
   "bugs": {
     "url": "https://github.com/one-ea/Monolith-MCP/issues"
   },
-  "publishConfig": {
-    "@one-ea:registry": "https://npm.pkg.github.com"
-  },
   "engines": {
     "node": ">=18"
   },
