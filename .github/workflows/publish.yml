@@ -18,7 +18,7 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm ci
       - run: npm run build
-      - run: npm publish --access public --registry https://registry.npmjs.org
+      - run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -37,6 +37,6 @@ jobs:
           scope: '@one-ea'
       - run: npm ci
       - run: npm run build
-      - run: npm publish
+      - run: npm publish --registry https://npm.pkg.github.com
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
