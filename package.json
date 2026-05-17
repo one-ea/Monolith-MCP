@@ -1,5 +1,5 @@
 {
-  "name": "monolith-mcp",
+  "name": "@one-ea/monolith-mcp",
   "version": "1.1.0",
   "description": "MCP server for Monolith blog — 30 tools for full content management via AI assistants",
   "type": "module",
@@ -34,6 +34,9 @@
   "homepage": "https://github.com/one-ea/Monolith-MCP",
   "bugs": {
     "url": "https://github.com/one-ea/Monolith-MCP/issues"
+  },
+  "publishConfig": {
+    "@one-ea:registry": "https://npm.pkg.github.com"
   },
   "engines": {
     "node": ">=18"
