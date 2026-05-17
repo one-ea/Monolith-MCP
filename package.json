@@ -1,6 +1,6 @@
 {
   "name": "@one-ea/monolith-mcp",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "MCP server for Monolith blog — 30 tools for full content management via AI assistants",
   "type": "module",
   "main": "dist/index.js",
